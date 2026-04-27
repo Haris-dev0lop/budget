@@ -1,0 +1,341 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>ระบบติดตามค่าใช้จ่าย</title>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: 'Segoe UI', sans-serif;
+      background: #f5f5f0;
+      color: #1a1a1a;
+      padding: 24px;
+      min-height: 100vh;
+    }
+    h1 {
+      font-size: 20px;
+      font-weight: 500;
+      margin-bottom: 20px;
+      color: #1a1a1a;
+    }
+    .page {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 20px;
+      max-width: 900px;
+      margin: 0 auto;
+    }
+    @media (max-width: 600px) {
+      .page { grid-template-columns: 1fr; }
+    }
+    .panel {
+      background: #ffffff;
+      border: 1px solid #e0e0d8;
+      border-radius: 12px;
+      padding: 20px;
+    }
+    .panel-title {
+      font-size: 11px;
+      font-weight: 500;
+      color: #888;
+      margin-bottom: 14px;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+    }
+    .total-box {
+      background: #f5f5f0;
+      border-radius: 8px;
+      padding: 14px 16px;
+      margin-bottom: 18px;
+    }
+    .total-label { font-size: 12px; color: #888; margin-bottom: 4px; }
+    .total-value { font-size: 26px; font-weight: 500; }
+    .total-remain { font-size: 13px; color: #888; margin-top: 4px; }
+    .form-group { margin-bottom: 12px; }
+    .form-group label { display: block; font-size: 12px; color: #888; margin-bottom: 4px; }
+    .form-group select,
+    .form-group input[type="number"],
+    .form-group input[type="text"] {
+      width: 100%;
+      padding: 9px 12px;
+      border: 1px solid #e0e0d8;
+      border-radius: 8px;
+      font-size: 14px;
+      background: #fff;
+      color: #1a1a1a;
+      outline: none;
+    }
+    .form-group select:focus,
+    .form-group input:focus { border-color: #aaa; }
+    .add-btn {
+      width: 100%;
+      padding: 10px;
+      background: #1a1a1a;
+      color: #fff;
+      border: none;
+      border-radius: 8px;
+      font-size: 14px;
+      font-weight: 500;
+      cursor: pointer;
+      margin-top: 4px;
+    }
+    .add-btn:hover { background: #333; }
+    .right-col { display: flex; flex-direction: column; gap: 16px; }
+    .chart-wrap { position: relative; width: 100%; height: 220px; }
+    .legend-wrap { display: flex; flex-wrap: wrap; gap: 8px 16px; margin-top: 10px; }
+    .legend-item { display: flex; align-items: center; gap: 6px; font-size: 12px; color: #666; }
+    .legend-dot { width: 10px; height: 10px; border-radius: 2px; flex-shrink: 0; }
+    .stats-row { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 14px; }
+    .stat-card { background: #f5f5f0; border-radius: 8px; padding: 12px 14px; }
+    .stat-label { font-size: 11px; color: #888; margin-bottom: 2px; }
+    .stat-val { font-size: 18px; font-weight: 500; }
+    .history-list { display: flex; flex-direction: column; gap: 8px; max-height: 200px; overflow-y: auto; }
+    .history-item {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 8px 10px;
+      background: #f5f5f0;
+      border-radius: 8px;
+    }
+    .history-dept { font-size: 13px; font-weight: 500; }
+    .history-note { font-size: 11px; color: #888; }
+    .history-amount { font-size: 14px; font-weight: 500; }
+    .history-del {
+      background: none;
+      border: none;
+      cursor: pointer;
+      color: #bbb;
+      font-size: 14px;
+      padding: 0 4px;
+    }
+    .history-del:hover { color: #e24b4a; }
+    .empty-msg { font-size: 13px; color: #aaa; text-align: center; padding: 16px; }
+  </style>
+</head>
+<body>
+
+<h1>ระบบติดตามค่าใช้จ่าย</h1>
+
+<div class="page">
+  <!-- ฝั่งซ้าย: ฟอร์มบันทึก -->
+  <div class="panel">
+    <div class="panel-title">บันทึกรายจ่าย</div>
+
+    <div class="total-box">
+      <div class="total-label">งบประมาณรวมทั้งหมด</div>
+      <div style="display:flex;align-items:center;gap:8px;">
+        <input
+          id="budgetInput"
+          type="number"
+          placeholder="0"
+          style="font-size:22px;font-weight:500;border:none;background:transparent;color:#1a1a1a;width:150px;padding:0;outline:none;"
+          oninput="updateBudget()"
+        />
+        <span style="font-size:14px;color:#888;">บาท</span>
+      </div>
+      <div class="total-remain" id="remainText">ยังไม่ได้ตั้งงบประมาณ</div>
+    </div>
+
+    <div class="form-group">
+      <label>ฝ่าย / แผนก</label>
+      <select id="deptSelect">
+        <option value="ฝ่ายการตลาด">ฝ่ายการตลาด</option>
+        <option value="ฝ่ายไอที">ฝ่ายไอที</option>
+        <option value="ฝ่ายบุคคล">ฝ่ายบุคคล</option>
+        <option value="ฝ่ายการเงิน">ฝ่ายการเงิน</option>
+        <option value="ฝ่ายปฏิบัติการ">ฝ่ายปฏิบัติการ</option>
+        <option value="ฝ่ายอื่นๆ">ฝ่ายอื่นๆ</option>
+      </select>
+    </div>
+
+    <div class="form-group">
+      <label>จำนวนเงิน (บาท)</label>
+      <input id="amountInput" type="number" placeholder="0.00" min="0" />
+    </div>
+
+    <div class="form-group">
+      <label>หมายเหตุ (ไม่บังคับ)</label>
+      <input id="noteInput" type="text" placeholder="เช่น ค่าอาหารงานเลี้ยง" />
+    </div>
+
+    <button class="add-btn" onclick="addExpense()">+ บันทึกรายจ่าย</button>
+  </div>
+
+  <!-- ฝั่งขวา: กราฟ + ประวัติ -->
+  <div class="right-col">
+    <div class="panel">
+      <div class="panel-title">สัดส่วนค่าใช้จ่ายตามฝ่าย</div>
+      <div class="chart-wrap">
+        <canvas id="pieChart" role="img" aria-label="กราฟวงกลมแสดงค่าใช้จ่ายแบ่งตามฝ่าย">ยังไม่มีข้อมูลรายจ่าย</canvas>
+      </div>
+      <div class="legend-wrap" id="legendWrap"></div>
+    </div>
+
+    <div class="panel">
+      <div class="panel-title">สรุปภาพรวม</div>
+      <div class="stats-row">
+        <div class="stat-card">
+          <div class="stat-label">ใช้จ่ายแล้ว</div>
+          <div class="stat-val" id="statUsed">฿0</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-label">จำนวนรายการ</div>
+          <div class="stat-val" id="statCount">0</div>
+        </div>
+      </div>
+      <div class="panel-title" style="margin-bottom:8px;">ประวัติรายการล่าสุด</div>
+      <div class="history-list" id="historyList">
+        <div class="empty-msg">ยังไม่มีรายการ</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+  const COLORS = ['#3266ad','#1D9E75','#D85A30','#BA7517','#993556','#534AB7'];
+  let expenses = [];
+  let chart = null;
+  let budget = 0;
+
+  function updateBudget() {
+    budget = parseFloat(document.getElementById('budgetInput').value) || 0;
+    updateRemain();
+  }
+
+  function updateRemain() {
+    const used = expenses.reduce((s, e) => s + e.amount, 0);
+    const el = document.getElementById('remainText');
+    if (budget <= 0) {
+      el.textContent = 'ยังไม่ได้ตั้งงบประมาณ';
+      el.style.color = '#888';
+      return;
+    }
+    const rem = budget - used;
+    if (rem >= 0) {
+      el.textContent = 'คงเหลือ ฿' + rem.toLocaleString('th-TH', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+      el.style.color = '#1D9E75';
+    } else {
+      el.textContent = 'เกินงบ ฿' + Math.abs(rem).toLocaleString('th-TH', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+      el.style.color = '#e24b4a';
+    }
+  }
+
+  function addExpense() {
+    const dept = document.getElementById('deptSelect').value;
+    const amount = parseFloat(document.getElementById('amountInput').value);
+    const note = document.getElementById('noteInput').value.trim();
+    if (!amount || amount <= 0) {
+      alert('กรุณาใส่จำนวนเงินที่ถูกต้อง');
+      return;
+    }
+    expenses.push({ dept, amount, note, id: Date.now() });
+    document.getElementById('amountInput').value = '';
+    document.getElementById('noteInput').value = '';
+    renderAll();
+  }
+
+  function deleteExpense(id) {
+    expenses = expenses.filter(e => e.id !== id);
+    renderAll();
+  }
+
+  function getDeptTotals() {
+    const map = {};
+    expenses.forEach(e => { map[e.dept] = (map[e.dept] || 0) + e.amount; });
+    return map;
+  }
+
+  function renderChart() {
+    const totals = getDeptTotals();
+    const labels = Object.keys(totals);
+    const data = Object.values(totals);
+    const colors = labels.map((_, i) => COLORS[i % COLORS.length]);
+
+    if (chart) { chart.destroy(); chart = null; }
+    if (labels.length === 0) {
+      document.getElementById('legendWrap').innerHTML = '';
+      return;
+    }
+
+    const ctx = document.getElementById('pieChart').getContext('2d');
+    chart = new Chart(ctx, {
+      type: 'doughnut',
+      data: {
+        labels,
+        datasets: [{
+          data,
+          backgroundColor: colors,
+          borderWidth: 2,
+          borderColor: '#ffffff',
+          hoverOffset: 8
+        }]
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        cutout: '55%',
+        plugins: {
+          legend: { display: false },
+          tooltip: {
+            callbacks: {
+              label: function (ctx) {
+                const val = ctx.parsed;
+                const total = ctx.dataset.data.reduce((a, b) => a + b, 0);
+                const pct = ((val / total) * 100).toFixed(1);
+                return ' ฿' + val.toLocaleString('th-TH') + ' (' + pct + '%)';
+              }
+            }
+          }
+        }
+      }
+    });
+
+    const total = data.reduce((a, b) => a + b, 0);
+    const legendHTML = labels.map((l, i) => {
+      const pct = total > 0 ? ((totals[l] / total) * 100).toFixed(1) : 0;
+      return `<span class="legend-item">
+        <span class="legend-dot" style="background:${colors[i]};"></span>
+        ${l} ${pct}%
+      </span>`;
+    }).join('');
+    document.getElementById('legendWrap').innerHTML = legendHTML;
+  }
+
+  function renderHistory() {
+    const el = document.getElementById('historyList');
+    if (expenses.length === 0) {
+      el.innerHTML = '<div class="empty-msg">ยังไม่มีรายการ</div>';
+      return;
+    }
+    el.innerHTML = [...expenses].reverse().slice(0, 20).map(e =>
+      `<div class="history-item">
+        <div>
+          <div class="history-dept">${e.dept}</div>
+          ${e.note ? `<div class="history-note">${e.note}</div>` : ''}
+        </div>
+        <div style="display:flex;align-items:center;gap:8px;">
+          <span class="history-amount">฿${e.amount.toLocaleString('th-TH', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+          <button class="history-del" onclick="deleteExpense(${e.id})">✕</button>
+        </div>
+      </div>`
+    ).join('');
+  }
+
+  function renderStats() {
+    const used = expenses.reduce((s, e) => s + e.amount, 0);
+    document.getElementById('statUsed').textContent = '฿' + used.toLocaleString('th-TH', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    document.getElementById('statCount').textContent = expenses.length;
+  }
+
+  function renderAll() {
+    renderChart();
+    renderHistory();
+    renderStats();
+    updateRemain();
+  }
+</script>
+</body>
+</html>
